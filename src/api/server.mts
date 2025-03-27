@@ -14,12 +14,21 @@ app.prepare().then(() => {
     const httpServer = createServer(handle);
     const io = new Server(httpServer);
     io.on("connection", (socket) => {
-        console.log(`User connected: ${socket.id}`);
         socket.on("join_room", ({room, username}) => {
             socket.join(room);
             console.log(`User ${username} joined room: ${room}`);
             socket.to(room).emit("user_joined", `${username} joined the room`);
+
+            if (room) io.emit('room_created', room)
+
         });
+
+        socket.on("get_rooms", () => {
+            const rooms = Array.from(io.sockets.adapter.rooms.keys());
+            const userRooms = rooms.filter(room => !io.sockets.adapter.sids.get(room))
+
+            socket.emit('room_list', userRooms)
+        })
 
         socket.on("message", ({room, message, sender}) => {
             console.log(`Message from ${sender} in room ${room}: ${message}`);
