@@ -14,19 +14,40 @@ app.prepare().then(() => {
     const httpServer = createServer(handle);
     const io = new Server(httpServer);
     io.on("connection", (socket) => {
-        console.log(`User connected: ${socket.id}`);
-        socket.on("join_room", ({room, username}) => {
+        const activeRooms = new Set<string>();
+
+        socket.on("join_room", ({ room, username }) => {
+            const isNewRoom = !activeRooms.has(room);
+
             socket.join(room);
             console.log(`User ${username} joined room: ${room}`);
-            socket.to(room).emit("user_joined", `${username} joined the room`);
+
+            socket.to(room).emit("user_joined", {
+                username,
+                message: `${username} joined the room`,
+                timestamp: Date.now()
+            });
+            if (isNewRoom) {
+                activeRooms.add(room);
+                io.emit('room_created', room)
+            }
         });
 
-        socket.on("message", ({room, message, sender}) => {
-            console.log(`Message from ${sender} in room ${room}: ${message}`);
-            socket.to(room).emit("message", {sender, message})
+
+        socket.on("get_rooms", () => {
+            const rooms = Array.from(io.sockets.adapter.rooms.keys());
+            const userRooms = rooms.filter(room => {
+                return room && !io.sockets.adapter.sids.get(room)
+            })
+            socket.emit('room_list', userRooms)
         })
 
-        socket.on("disconnect", () => {
+        socket.on("answer_selected", (data) => {
+            io.to(data.roomId).emit('update_answers', data);
+        })
+
+
+        socket.on('disconnect', () => {
             console.log(`User disconnected: ${socket.id}`);
         })
     });
